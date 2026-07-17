@@ -1,0 +1,75 @@
+{
+  "name": "@emasphere/openclaw-slack-thread-focus",
+  "version": "0.1.0",
+  "description": "Mute and resume individual OpenClaw agents in Slack threads with reactions and mentions",
+  "type": "module",
+  "license": "MIT",
+  "author": "EMAsphere",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/EMAsphere/openclaw-slack-thread-focus.git"
+  },
+  "homepage": "https://github.com/EMAsphere/openclaw-slack-thread-focus#readme",
+  "bugs": {
+    "url": "https://github.com/EMAsphere/openclaw-slack-thread-focus/issues"
+  },
+  "engines": {
+    "node": ">=22.22.3"
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "src",
+    "openclaw.plugin.json",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "test": "vitest run",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "check": "npm run typecheck && npm test && npm run build",
+    "prepack": "npm run build"
+  },
+  "peerDependencies": {
+    "openclaw": ">=2026.7.1"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "openclaw": "2026.7.1",
+    "typescript": "^5.9.0",
+    "vitest": "^3.2.4"
+  },
+  "openclaw": {
+    "extensions": [
+      "./src/index.ts"
+    ],
+    "runtimeExtensions": [
+      "./dist/index.js"
+    ],
+    "plugin": {
+      "id": "slack-thread-focus",
+      "label": "Slack Thread Focus"
+    },
+    "install": {
+      "npmSpec": "@emasphere/openclaw-slack-thread-focus",
+      "defaultChoice": "npm",
+      "minHostVersion": ">=2026.7.1"
+    },
+    "compat": {
+      "pluginApi": ">=2026.7.1",
+      "minGatewayVersion": "2026.7.1"
+    },
+    "build": {
+      "openclawVersion": "2026.7.1",
+      "pluginSdkVersion": "2026.7.1"
+    }
+  }
+}
