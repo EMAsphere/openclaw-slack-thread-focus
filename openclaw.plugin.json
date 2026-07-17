@@ -1,0 +1,78 @@
+{
+  "id": "slack-thread-focus",
+  "name": "Slack Thread Focus",
+  "description": "Mute an OpenClaw in a Slack thread with a root-message reaction and resume it with a mention",
+  "activation": {
+    "onStartup": true
+  },
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "muteEmoji": {
+        "type": "string",
+        "minLength": 1,
+        "default": "no_bell"
+      },
+      "resumeEmoji": {
+        "type": "string",
+        "minLength": 1,
+        "default": "bell"
+      },
+      "botTokenEnv": {
+        "type": "string",
+        "pattern": "^[A-Za-z_][A-Za-z0-9_]*$",
+        "default": "SLACK_BOT_TOKEN"
+      },
+      "apiTimeoutMs": {
+        "type": "integer",
+        "minimum": 250,
+        "maximum": 30000,
+        "default": 3000
+      },
+      "cacheTtlMs": {
+        "type": "integer",
+        "minimum": 0,
+        "maximum": 60000,
+        "default": 0
+      },
+      "stateTtlDays": {
+        "type": "integer",
+        "minimum": 1,
+        "maximum": 3650,
+        "default": 90
+      },
+      "agentId": {
+        "type": "string",
+        "minLength": 1
+      }
+    }
+  },
+  "uiHints": {
+    "muteEmoji": {
+      "label": "Mute reaction",
+      "help": "Slack reaction name on the root message that mutes the claw."
+    },
+    "resumeEmoji": {
+      "label": "Resume reaction",
+      "help": "Optional Slack reaction name that resumes the claw."
+    },
+    "botTokenEnv": {
+      "label": "Bot token environment variable",
+      "help": "Name of the environment variable containing the Slack bot token."
+    },
+    "apiTimeoutMs": {
+      "label": "Slack API timeout (ms)"
+    },
+    "cacheTtlMs": {
+      "label": "Reaction cache TTL (ms)"
+    },
+    "stateTtlDays": {
+      "label": "State retention (days)"
+    },
+    "agentId": {
+      "label": "Agent id override",
+      "help": "Optional stable agent id for multi-agent OpenClaw instances."
+    }
+  }
+}
