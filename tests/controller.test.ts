@@ -50,6 +50,21 @@ describe("ThreadFocusController", () => {
     });
   });
 
+  it("persists a message_received resume before the outgoing reaction check", async () => {
+    const reactions = { getSnapshot: vi.fn().mockResolvedValue({
+      muteCount: 1,
+      resumeCount: 0,
+      fetchedAt: Date.now(),
+    }) };
+    const controller = new ThreadFocusController(await store(), reactions, 0, {});
+    await controller.evaluate(reference, false, true);
+    await controller.requestResume(reference);
+    await expect(controller.evaluate(reference, false, true)).resolves.toMatchObject({
+      muted: false,
+      state: { resumePending: false, resumedMuteCount: 1 },
+    });
+  });
+
   it("fails open for unknown threads during a Slack outage", async () => {
     const reactions = { getSnapshot: vi.fn().mockRejectedValue(new Error("offline")) };
     const controller = new ThreadFocusController(await store(), reactions, 0, {});
