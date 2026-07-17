@@ -71,4 +71,45 @@ describe("SlackReactionClient", () => {
       retryAfterMs: 2000,
     });
   });
+
+  it("detects an explicit bot mention from the raw threaded Slack message", async () => {
+    const fetchImpl = vi.fn<typeof fetch>().mockResolvedValue(new Response(JSON.stringify({
+      ok: true,
+      messages: [{ ts: "1712.0002", text: "<@USERGIO> reviens" }],
+    }), { status: 200 }));
+    const client = new SlackReactionClient({
+      token: "token",
+      botUserId: "USERGIO",
+      muteEmoji: "no_bell",
+      resumeEmoji: "bell",
+      timeoutMs: 1000,
+      fetchImpl,
+    });
+
+    await expect(client.hasExplicitBotMention("C123", "1712.0001", "1712.0002"))
+      .resolves.toBe(true);
+    expect(fetchImpl).toHaveBeenCalledWith(
+      "https://slack.com/api/conversations.replies?channel=C123&ts=1712.0001&oldest=1712.0002&latest=1712.0002&inclusive=true&limit=1",
+      expect.anything(),
+    );
+  });
+
+  it("resolves and caches the bot user id with auth.test", async () => {
+    const fetchImpl = vi.fn<typeof fetch>().mockResolvedValue(new Response(JSON.stringify({
+      ok: true,
+      user_id: "USERGIO",
+    }), { status: 200 }));
+    const client = new SlackReactionClient({
+      token: "token",
+      muteEmoji: "no_bell",
+      resumeEmoji: "bell",
+      timeoutMs: 1000,
+      fetchImpl,
+    });
+
+    await client.warmupIdentity();
+    await client.warmupIdentity();
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+    expect(fetchImpl.mock.calls[0]?.[0]).toBe("https://slack.com/api/auth.test");
+  });
 });

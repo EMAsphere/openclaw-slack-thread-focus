@@ -11,6 +11,8 @@ export type ThreadState = {
   lastMuteCount: number;
   lastResumeCount: number;
   resumedMuteCount: number;
+  /** A mention observed by message_received, waiting for a Slack reaction snapshot. */
+  resumePending?: boolean;
   updatedAt: number;
 };
 
@@ -31,6 +33,7 @@ export type PluginConfig = {
   muteEmoji: string;
   resumeEmoji: string;
   botTokenEnv: string;
+  botUserIdEnv: string;
   apiTimeoutMs: number;
   cacheTtlMs: number;
   stateTtlDays: number;

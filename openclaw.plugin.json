@@ -24,6 +24,11 @@
         "pattern": "^[A-Za-z_][A-Za-z0-9_]*$",
         "default": "SLACK_BOT_TOKEN"
       },
+      "botUserIdEnv": {
+        "type": "string",
+        "pattern": "^[A-Za-z_][A-Za-z0-9_]*$",
+        "default": "SLACK_BOT_USER_ID"
+      },
       "apiTimeoutMs": {
         "type": "integer",
         "minimum": 250,
@@ -60,6 +65,10 @@
     "botTokenEnv": {
       "label": "Bot token environment variable",
       "help": "Name of the environment variable containing the Slack bot token."
+    },
+    "botUserIdEnv": {
+      "label": "Bot user id environment variable",
+      "help": "Optional Slack bot user id. When absent, the plugin resolves it with auth.test."
     },
     "apiTimeoutMs": {
       "label": "Slack API timeout (ms)"

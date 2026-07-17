@@ -4,6 +4,7 @@ const DEFAULT_CONFIG: PluginConfig = {
   muteEmoji: "no_bell",
   resumeEmoji: "bell",
   botTokenEnv: "SLACK_BOT_TOKEN",
+  botUserIdEnv: "SLACK_BOT_USER_ID",
   apiTimeoutMs: 3000,
   cacheTtlMs: 0,
   stateTtlDays: 90,
@@ -34,6 +35,10 @@ export function resolvePluginConfig(value: unknown): PluginConfig {
   const botTokenEnv = /^[A-Za-z_][A-Za-z0-9_]*$/.test(candidateEnv)
     ? candidateEnv
     : DEFAULT_CONFIG.botTokenEnv;
+  const candidateUserIdEnv = stringValue(raw.botUserIdEnv, DEFAULT_CONFIG.botUserIdEnv);
+  const botUserIdEnv = /^[A-Za-z_][A-Za-z0-9_]*$/.test(candidateUserIdEnv)
+    ? candidateUserIdEnv
+    : DEFAULT_CONFIG.botUserIdEnv;
   const agentId = typeof raw.agentId === "string" && raw.agentId.trim()
     ? raw.agentId.trim()
     : undefined;
@@ -42,6 +47,7 @@ export function resolvePluginConfig(value: unknown): PluginConfig {
     muteEmoji: emojiName(raw.muteEmoji, DEFAULT_CONFIG.muteEmoji),
     resumeEmoji: emojiName(raw.resumeEmoji, DEFAULT_CONFIG.resumeEmoji),
     botTokenEnv,
+    botUserIdEnv,
     apiTimeoutMs: integerValue(raw.apiTimeoutMs, DEFAULT_CONFIG.apiTimeoutMs, 250, 30_000),
     cacheTtlMs: integerValue(raw.cacheTtlMs, DEFAULT_CONFIG.cacheTtlMs, 0, 60_000),
     stateTtlDays: integerValue(raw.stateTtlDays, DEFAULT_CONFIG.stateTtlDays, 1, 3650),

@@ -31,6 +31,7 @@ function parseThreadState(value: unknown): ThreadState | undefined {
     lastMuteCount: state.lastMuteCount,
     lastResumeCount: state.lastResumeCount,
     resumedMuteCount: state.resumedMuteCount,
+    ...(typeof state.resumePending === "boolean" ? { resumePending: state.resumePending } : {}),
     updatedAt: state.updatedAt,
   };
 }

@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { transitionThreadState } from "../src/state-machine.js";
+import { requestResumeWithoutSnapshot } from "../src/state-machine.js";
 import type { ReactionSnapshot, ThreadState } from "../src/types.js";
 
 const at = 1_000;
@@ -65,5 +66,15 @@ describe("transitionThreadState", () => {
     const remuted = transitionThreadState(resumed, snapshot(3), false, at + 1)!;
     expect(remuted.mode).toBe("muted");
     expect(transitionThreadState(remuted, snapshot(2), false, at + 2)?.mode).toBe("active");
+  });
+
+  it("consumes a resume queued by message_received on the next reaction snapshot", () => {
+    const pending = requestResumeWithoutSnapshot(undefined, at);
+    expect(pending).toMatchObject({ mode: "active", resumePending: true });
+    expect(transitionThreadState(pending, snapshot(1), false, at + 1)).toMatchObject({
+      mode: "active",
+      resumedMuteCount: 1,
+      resumePending: false,
+    });
   });
 });

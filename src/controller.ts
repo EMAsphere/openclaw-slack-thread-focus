@@ -1,4 +1,4 @@
-import { resumeWithoutSnapshot, transitionThreadState } from "./state-machine.js";
+import { requestResumeWithoutSnapshot, transitionThreadState } from "./state-machine.js";
 import type { JsonThreadStateStore } from "./store.js";
 import type {
   FocusDecision,
@@ -62,13 +62,26 @@ export class ThreadFocusController {
     }
   }
 
+  async requestResume(reference: ThreadReference): Promise<FocusDecision> {
+    try {
+      const state = await this.store.mutate(reference, (previous) =>
+        requestResumeWithoutSnapshot(previous, this.now()));
+      return { muted: false, source: "mention", ...(state ? { state } : {}) };
+    } catch (error) {
+      this.logger.error?.(
+        `slack-thread-focus: could not persist mention resume for ${reference.channelId}:${reference.threadTs} (${String(error)})`,
+      );
+      return { muted: false, source: "mention" };
+    }
+  }
+
   private async evaluateStored(
     reference: ThreadReference,
     explicitMention: boolean,
   ): Promise<FocusDecision> {
     try {
       const state = await this.store.mutate(reference, (previous) =>
-        explicitMention ? resumeWithoutSnapshot(previous, this.now()) : previous);
+        explicitMention ? requestResumeWithoutSnapshot(previous, this.now()) : previous);
       return {
         muted: explicitMention ? false : state?.mode === "muted",
         source: explicitMention ? "mention" : (state ? "stored" : "fail-open"),

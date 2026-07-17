@@ -4,7 +4,8 @@ function sameState(left: ThreadState | undefined, right: Omit<ThreadState, "upda
   return left?.mode === right.mode &&
     left.lastMuteCount === right.lastMuteCount &&
     left.lastResumeCount === right.lastResumeCount &&
-    left.resumedMuteCount === right.resumedMuteCount;
+    left.resumedMuteCount === right.resumedMuteCount &&
+    Boolean(left.resumePending) === Boolean(right.resumePending);
 }
 
 function materialize(
@@ -37,13 +38,15 @@ export function transitionThreadState(
       lastMuteCount: 0,
       lastResumeCount: resumeCount,
       resumedMuteCount: 0,
+      resumePending: false,
     }, now);
   }
 
   const resumeReactionAdded = previous
     ? resumeCount > previous.lastResumeCount
     : resumeCount > 0;
-  const resumedMuteCount = explicitMention || resumeReactionAdded
+  const resumeRequested = explicitMention || previous?.resumePending === true || resumeReactionAdded;
+  const resumedMuteCount = resumeRequested
     ? muteCount
     : (previous?.resumedMuteCount ?? 0);
   const mode = muteCount <= resumedMuteCount ? "active" : "muted";
@@ -53,19 +56,19 @@ export function transitionThreadState(
     lastMuteCount: muteCount,
     lastResumeCount: resumeCount,
     resumedMuteCount,
+    resumePending: false,
   }, now);
 }
 
-export function resumeWithoutSnapshot(
+export function requestResumeWithoutSnapshot(
   previous: ThreadState | undefined,
   now: number,
-): ThreadState | undefined {
-  if (!previous) {
-    return undefined;
-  }
+): ThreadState {
   return materialize(previous, {
-    ...previous,
     mode: "active",
-    resumedMuteCount: Math.max(previous.resumedMuteCount, previous.lastMuteCount),
+    lastMuteCount: previous?.lastMuteCount ?? 0,
+    lastResumeCount: previous?.lastResumeCount ?? 0,
+    resumedMuteCount: Math.max(previous?.resumedMuteCount ?? 0, previous?.lastMuteCount ?? 0),
+    resumePending: true,
   }, now);
 }
