@@ -8,6 +8,8 @@ const DEFAULT_CONFIG: PluginConfig = {
   apiTimeoutMs: 3000,
   cacheTtlMs: 0,
   stateTtlDays: 90,
+  progressCards: false,
+  progressAccountId: "default",
 };
 
 function isObject(value: unknown): value is Record<string, unknown> {
@@ -48,6 +50,8 @@ export function resolvePluginConfig(value: unknown): PluginConfig {
     resumeEmoji: emojiName(raw.resumeEmoji, DEFAULT_CONFIG.resumeEmoji),
     botTokenEnv,
     botUserIdEnv,
+    progressCards: raw.progressCards === true,
+    progressAccountId: stringValue(raw.progressAccountId, DEFAULT_CONFIG.progressAccountId),
     apiTimeoutMs: integerValue(raw.apiTimeoutMs, DEFAULT_CONFIG.apiTimeoutMs, 250, 30_000),
     cacheTtlMs: integerValue(raw.cacheTtlMs, DEFAULT_CONFIG.cacheTtlMs, 0, 60_000),
     stateTtlDays: integerValue(raw.stateTtlDays, DEFAULT_CONFIG.stateTtlDays, 1, 3650),

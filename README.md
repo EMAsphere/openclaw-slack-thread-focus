@@ -103,6 +103,67 @@ active threads and keeps known muted threads muted. Native Slack mentions need
 the raw-message lookup, so a new resume cannot be guaranteed during a Slack API
 outage.
 
+### Slack progress cards (opt-in)
+
+On OpenClaw `2026.9.2`, registering an outbound modifier such as our
+`message_sending` hook disables Slack's native progress previews. Setting
+`channels.slack.streaming.mode: "progress"` alone cannot display those cards
+while thread focus is enabled.
+
+Enable this plugin's own Block Kit card instead:
+
+```json
+{
+  "plugins": {
+    "entries": {
+      "slack-thread-focus": {
+        "enabled": true,
+        "config": { "progressCards": true }
+      }
+    }
+  }
+}
+```
+
+The card appears in the originating thread on the first tool or plan event,
+then updates in place (at most once every 1.5 seconds per run). It shows tool
+names, status, up to eight authored plan steps, and completion/failure. It does
+not display tool arguments, results, command output, or model reasoning. Plan
+labels are displayed as plain text. A task without tool/plan events has no card.
+The final answer still uses OpenClaw's normal delivery and focus gate.
+
+Every card write waits for pending mention checks and reads fresh root-message
+reactions. A muted thread gets no card; a newly observed mute deletes this run's
+existing card and stops further progress for that run. Checks happen on progress
+events, not continuously during a long-running tool. On a reaction lookup failure,
+progress writes are skipped, even if final replies would fail open. On a write
+failure (including rate limits), progress stops for that run without retrying a
+possibly successful post. Existing cards may remain stale after an outage,
+restart, or interrupted event stream.
+
+Requires Slack `chat:write`, the existing reaction/history scopes, and the host's
+agent-event and runtime-lifecycle APIs. Enable capability consent after upgrading:
+`openclaw plugins enable slack-thread-focus --accept-capabilities`.
+
+The bot token must belong to `progressAccountId` (default `"default"`). Other
+Slack accounts are ignored for progress. Only recently received Slack messages
+followed by a user reply turn are eligible; cron/heartbeat and unknown sessions
+do not create progress cards. This direct Slack card implements the focus check
+itself; it does not pass through other plugins' outbound message modifiers.
+
+Before npm publication, build an archive from the desired Git commit:
+
+```bash
+npm ci
+npm run check
+npm pack
+openclaw plugins install ./emasphere-openclaw-slack-thread-focus-0.1.1.tgz --force --accept-capabilities
+```
+
+Install the resulting archive on the host. Direct Git installation does not
+build `dist/`, which OpenClaw requires for installed packages. Keep the archive
+or rebuild from the same commit when restoring the persistent plugin directory.
+
 ## Development
 
 Requires Node.js 22.22.3 or newer in a version supported by OpenClaw.

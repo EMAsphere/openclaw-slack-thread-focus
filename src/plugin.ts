@@ -7,6 +7,8 @@ import { containsAgentNameMention } from "./mention.js";
 import { resolveInboundReference, resolveOutboundReference } from "./routing.js";
 import { SlackReactionClient } from "./slack.js";
 import { JsonThreadStateStore } from "./store.js";
+import { ProgressCards } from "./progress.js";
+import { SlackProgressClient } from "./progress-slack.js";
 import type { ThreadReference } from "./types.js";
 
 function resolveDefaultAgentId(api: OpenClawPluginApi): string {
@@ -86,6 +88,34 @@ export function registerSlackThreadFocus(api: OpenClawPluginApi): void {
   );
   const defaultAgentId = resolveDefaultAgentId(api);
   const pendingMentionChecks = new Map<string, Set<Promise<void>>>();
+  const checkFocus = async (reference: ThreadReference) => {
+    const checks = pendingMentionChecks.get(pendingKey(reference));
+    if (checks) await Promise.all([...checks]);
+    return controller.evaluate(reference, false, true);
+  };
+  let progress: ProgressCards | undefined;
+  if (config.progressCards) {
+    if (token && api.agent?.events?.registerAgentEventSubscription && api.lifecycle?.registerRuntimeLifecycle) {
+      progress = new ProgressCards(
+        new SlackProgressClient(token, config.apiTimeoutMs), checkFocus, api.logger, config.progressAccountId,
+      );
+      api.agent.events.registerAgentEventSubscription({
+        id: "slack-thread-progress",
+        streams: ["tool", "plan", "lifecycle"],
+        handle: (event) => progress?.handle(event),
+      });
+      api.lifecycle.registerRuntimeLifecycle({
+        id: "slack-thread-progress",
+        cleanup: (context) => progress?.cleanup(context),
+      });
+      api.on("before_agent_reply", (_event, context) => {
+        progress?.authorizeReply(context.sessionKey, context.trigger);
+      });
+      api.logger.info?.("slack-thread-focus: progress cards enabled");
+    } else {
+      api.logger.warn?.("slack-thread-focus: progress cards require a Slack token and the agent event/lifecycle APIs");
+    }
+  }
 
   if (!token) {
     api.logger.warn?.(
@@ -110,6 +140,8 @@ export function registerSlackThreadFocus(api: OpenClawPluginApi): void {
     if (!reference) {
       return;
     }
+
+    progress?.rememberInbound(event.sessionKey ?? context.sessionKey, reference);
 
     const key = pendingKey(reference);
     const messageTs = optionalText(event.messageId) || optionalText(event.metadata?.messageId);
@@ -193,11 +225,7 @@ export function registerSlackThreadFocus(api: OpenClawPluginApi): void {
     if (!reference) {
       return;
     }
-    const checks = pendingMentionChecks.get(pendingKey(reference));
-    if (checks) {
-      await Promise.all([...checks]);
-    }
-    const decision = await controller.evaluate(reference, false, true);
+    const decision = await checkFocus(reference);
     if (!decision.muted) {
       return;
     }

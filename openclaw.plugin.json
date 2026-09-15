@@ -50,6 +50,15 @@
       "agentId": {
         "type": "string",
         "minLength": 1
+      },
+      "progressCards": {
+        "type": "boolean",
+        "default": false
+      },
+      "progressAccountId": {
+        "type": "string",
+        "minLength": 1,
+        "default": "default"
       }
     }
   },
@@ -82,6 +91,14 @@
     "agentId": {
       "label": "Agent id override",
       "help": "Optional stable agent id for multi-agent OpenClaw instances."
+    },
+    "progressCards": {
+      "label": "Thread progress cards",
+      "help": "Opt-in Block Kit progress, checked against thread focus before every write."
+    },
+    "progressAccountId": {
+      "label": "Progress Slack account",
+      "help": "Account owned by botTokenEnv. Cards from other accounts are ignored."
     }
   }
 }

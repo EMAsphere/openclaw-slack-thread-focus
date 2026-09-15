@@ -37,6 +37,8 @@ export type PluginConfig = {
   apiTimeoutMs: number;
   cacheTtlMs: number;
   stateTtlDays: number;
+  progressCards: boolean;
+  progressAccountId: string;
   agentId?: string;
 };
 

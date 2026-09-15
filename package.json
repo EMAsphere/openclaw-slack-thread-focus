@@ -1,6 +1,6 @@
 {
   "name": "@emasphere/openclaw-slack-thread-focus",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Mute and resume individual OpenClaw agents in Slack threads with reactions and mentions",
   "type": "module",
   "license": "MIT",

@@ -12,7 +12,7 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-async function registerPlugin(fetchOverride?: typeof fetch): Promise<Map<string, Hook>> {
+async function registerPlugin(fetchOverride?: typeof fetch, extra: Record<string, unknown> = {}): Promise<Map<string, Hook>> {
   const directory = await mkdtemp(join(tmpdir(), "thread-focus-plugin-"));
   const hooks = new Map<string, Hook>();
   vi.stubEnv("SLACK_BOT_TOKEN", "xoxb-test");
@@ -43,12 +43,58 @@ async function registerPlugin(fetchOverride?: typeof fetch): Promise<Map<string,
       },
     },
     on: (name: string, handler: Hook) => hooks.set(name, handler),
+    ...extra,
   } as unknown as OpenClawPluginApi;
   registerSlackThreadFocus(api);
   return hooks;
 }
 
 describe("OpenClaw hooks", () => {
+  it("keeps progress opt-in and preserves the outgoing focus gate", async () => {
+    const register = vi.fn();
+    const hooks = await registerPlugin(undefined, { agent: { events: { registerAgentEventSubscription: register } } });
+    expect(register).not.toHaveBeenCalled();
+    expect(hooks.has("message_sending")).toBe(true);
+    expect(hooks.has("before_agent_reply")).toBe(false);
+  });
+
+  it("correlates host hooks to progress and waits for a pending mention before posting", async () => {
+    vi.useFakeTimers();
+    let releaseReplies!: (value: Response) => void;
+    const fetchImpl = vi.fn<typeof fetch>().mockImplementation(async (input) => {
+      const url = String(input);
+      if (url.includes("conversations.replies")) return new Promise<Response>((resolve) => { releaseReplies = resolve; });
+      if (url.includes("chat.postMessage")) return new Response(JSON.stringify({ ok: true, ts: "1712.0009" }));
+      return new Response(JSON.stringify({ ok: true, message: { reactions: [{ name: "no_bell", count: 1 }] } }));
+    });
+    type Subscription = { handle(event: Record<string, unknown>): void };
+    let subscription!: Subscription;
+    let cleanup!: { cleanup(context: object): void };
+    try {
+      const hooks = await registerPlugin(fetchImpl, {
+        pluginConfig: { progressCards: true },
+        agent: { events: { registerAgentEventSubscription: (value: Subscription) => { subscription = value; } } },
+        lifecycle: { registerRuntimeLifecycle: (value: typeof cleanup) => { cleanup = value; } },
+      });
+      const sessionKey = "agent:main:slack:channel:c123:thread:1712.0001";
+      const received = hooks.get("message_received")!({
+        from: "slack:C123", content: "reviens", messageId: "1712.0002", threadId: "1712.0001", sessionKey,
+      } as never, { channelId: "slack", conversationId: "C123", sessionKey } as never);
+      await hooks.get("before_agent_reply")!({} as never, { sessionKey, trigger: "user" } as never);
+      subscription.handle({ runId: "r1", seq: 1, stream: "tool", sessionKey, ts: Date.now(),
+        data: { phase: "start", toolCallId: "t1", name: "exec" } });
+      await vi.advanceTimersByTimeAsync(0);
+      expect(fetchImpl.mock.calls.some(([url]) => String(url).includes("chat.postMessage"))).toBe(false);
+      releaseReplies(new Response(JSON.stringify({ ok: true, messages: [{ ts: "1712.0002", text: "<@USERGIO> reviens" }] })));
+      await received;
+      await vi.waitFor(() => {
+        expect(fetchImpl.mock.calls.filter(([url]) => String(url).includes("chat.postMessage"))).toHaveLength(1);
+      });
+      cleanup.cleanup({});
+    } finally {
+      vi.useRealTimers();
+    }
+  });
   it("claims a muted inbound message before the model and lets a mention resume", async () => {
     const hooks = await registerPlugin();
     const inbound = hooks.get("inbound_claim")!;
