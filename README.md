@@ -34,7 +34,7 @@ conversation types it uses).
 After the package is published:
 
 ```bash
-openclaw plugins install @emasphere/openclaw-slack-thread-focus@0.1.2
+openclaw plugins install @emasphere/openclaw-slack-thread-focus@0.1.3
 ```
 
 Enable it in `openclaw.json`:
@@ -56,7 +56,7 @@ For the OpenClaw Kubernetes operator:
 ```yaml
 spec:
   plugins:
-    - npm:@emasphere/openclaw-slack-thread-focus@0.1.2
+    - npm:@emasphere/openclaw-slack-thread-focus@0.1.3
   config:
     raw:
       plugins:
@@ -137,6 +137,14 @@ not display tool arguments, results, command output, or model reasoning. Plan
 labels are displayed as plain text. A task without tool/plan events has no card.
 The final answer still uses OpenClaw's normal delivery and focus gate.
 
+OpenClaw can deliver conversation hooks and agent events through different
+plugin registries. Version 0.1.3 shares the route, pending mention checks, focus
+store and card state across matching registrations in the same process. State
+is isolated by plugin version, state directory, settings and credentials;
+retiring one registry leaves the others' active cards intact. Logs record route
+registration, reply matching, run tracking and successful card creation without
+message contents or tool arguments.
+
 Every card write waits for pending mention checks and reads fresh root-message
 reactions. A muted thread gets no card; a newly observed mute deletes this run's
 existing card and stops further progress for that run. Checks happen on progress
@@ -165,7 +173,7 @@ Before npm publication, build an archive from the desired Git commit:
 npm ci
 npm run check
 npm pack
-openclaw plugins install ./emasphere-openclaw-slack-thread-focus-0.1.2.tgz --force --accept-capabilities
+openclaw plugins install ./emasphere-openclaw-slack-thread-focus-0.1.3.tgz --force --accept-capabilities
 ```
 
 Install the resulting archive on the host. Direct Git installation does not

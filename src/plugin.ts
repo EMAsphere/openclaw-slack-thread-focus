@@ -1,4 +1,5 @@
 import { homedir } from "node:os";
+import { createHash } from "node:crypto";
 import { join } from "node:path";
 import type { OpenClawPluginApi } from "openclaw/plugin-sdk/plugin-entry";
 import { resolvePluginConfig } from "./config.js";
@@ -9,6 +10,7 @@ import { SlackReactionClient } from "./slack.js";
 import { JsonThreadStateStore } from "./store.js";
 import { ProgressCards } from "./progress.js";
 import { SlackProgressClient } from "./progress-slack.js";
+import { acquireSharedRuntime } from "./shared-runtime.js";
 import type { ThreadReference } from "./types.js";
 
 function resolveDefaultAgentId(api: OpenClawPluginApi): string {
@@ -67,40 +69,44 @@ export function registerSlackThreadFocus(api: OpenClawPluginApi): void {
   const token = process.env[config.botTokenEnv]?.trim();
   const botUserId = process.env[config.botUserIdEnv]?.trim();
   const stateDir = api.runtime.state.resolveStateDir(process.env) || fallbackStateDir();
-  const store = new JsonThreadStateStore(
-    join(stateDir, "plugins", "slack-thread-focus", "state.json"),
-    config.stateTtlDays * 24 * 60 * 60 * 1000,
-  );
-  const reactions = token
-    ? new SlackReactionClient({
-        token,
-        muteEmoji: config.muteEmoji,
-        resumeEmoji: config.resumeEmoji,
-        timeoutMs: config.apiTimeoutMs,
-        ...(botUserId ? { botUserId } : {}),
-      })
-    : undefined;
-  const controller = new ThreadFocusController(
-    store,
-    reactions,
-    config.cacheTtlMs,
-    api.logger,
-  );
-  const defaultAgentId = resolveDefaultAgentId(api);
-  const pendingMentionChecks = new Map<string, Set<Promise<void>>>();
-  const checkFocus = async (reference: ThreadReference) => {
-    const checks = pendingMentionChecks.get(pendingKey(reference));
-    if (checks) await Promise.all([...checks]);
-    return controller.evaluate(reference, false, true);
+  const supportsProgress = typeof api.agent?.events?.registerAgentEventSubscription === "function" &&
+    typeof api.lifecycle?.registerRuntimeLifecycle === "function";
+  const createRuntime = () => {
+    const store = new JsonThreadStateStore(
+      join(stateDir, "plugins", "slack-thread-focus", "state.json"),
+      config.stateTtlDays * 24 * 60 * 60 * 1000,
+    );
+    const reactions = token
+      ? new SlackReactionClient({
+          token,
+          muteEmoji: config.muteEmoji,
+          resumeEmoji: config.resumeEmoji,
+          timeoutMs: config.apiTimeoutMs,
+          ...(botUserId ? { botUserId } : {}),
+        })
+      : undefined;
+    const controller = new ThreadFocusController(store, reactions, config.cacheTtlMs, api.logger);
+    const pendingMentionChecks = new Map<string, Set<Promise<void>>>();
+    const checkFocus = async (reference: ThreadReference) => {
+      const checks = pendingMentionChecks.get(pendingKey(reference));
+      if (checks) await Promise.all([...checks]);
+      return controller.evaluate(reference, false, true);
+    };
+    const progress = config.progressCards && supportsProgress && token
+      ? new ProgressCards(new SlackProgressClient(token, config.apiTimeoutMs), checkFocus, api.logger, config.progressAccountId)
+      : undefined;
+    return { controller, reactions, pendingMentionChecks, checkFocus, progress };
   };
-  let progress: ProgressCards | undefined;
+  // Share routes, queued mention checks, and the cached state writer across registries.
+  // Isolate state directories, versions, settings and credentials without retaining raw tokens in keys.
+  const shared = config.progressCards && supportsProgress ? acquireSharedRuntime(
+    JSON.stringify([stateDir, api.version ?? "development", config, botUserId,
+      createHash("sha256").update(token ?? "").digest("hex")]), createRuntime,
+  ) : undefined;
+  const { controller, reactions, pendingMentionChecks, checkFocus, progress } = shared?.value ?? createRuntime();
+  const defaultAgentId = resolveDefaultAgentId(api);
   if (config.progressCards) {
-    if (api.agent?.events?.registerAgentEventSubscription && api.lifecycle?.registerRuntimeLifecycle) {
-      if (token) {
-        progress = new ProgressCards(
-          new SlackProgressClient(token, config.apiTimeoutMs), checkFocus, api.logger, config.progressAccountId,
-        );
-      }
+    if (supportsProgress) {
       // CLI/init containers may not have Slack credentials. They must still discover
       // the same registrations as the gateway when accepting plugin capabilities.
       api.agent.events.registerAgentEventSubscription({
@@ -110,7 +116,10 @@ export function registerSlackThreadFocus(api: OpenClawPluginApi): void {
       });
       api.lifecycle.registerRuntimeLifecycle({
         id: "slack-thread-progress",
-        cleanup: (context) => progress?.cleanup(context),
+        cleanup: (context) => {
+          if (context.runId || context.sessionKey) progress?.cleanup(context);
+          else if (shared?.release() ?? true) progress?.cleanup();
+        },
       });
       api.on("before_agent_reply", (_event, context) => {
         progress?.authorizeReply(context.sessionKey, context.trigger);

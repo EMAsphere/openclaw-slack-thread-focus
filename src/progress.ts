@@ -50,11 +50,15 @@ export class ProgressCards {
     const key = sessionKey.toLowerCase();
     if (this.routes.size >= LIMIT && !this.routes.has(key)) return;
     this.routes.set(key, { reference: { ...reference }, sessionKey: key, expires: this.now() + ROUTE_TTL, armed: false });
+    this.logger.info?.(`slack-thread-focus: progress received ${key}`);
   }
 
   authorizeReply(sessionKey: string | undefined, trigger: string | undefined): void {
     const route = sessionKey ? this.routes.get(sessionKey.toLowerCase()) : undefined;
     if (route) route.armed = trigger === "user";
+    if (route || sessionKey?.includes(":slack:")) {
+      this.logger.info?.(`slack-thread-focus: progress reply ${sessionKey} trigger=${trigger ?? "unknown"} route=${route ? "found" : "missing"}`);
+    }
   }
 
   handle(event: ProgressEvent): void {
@@ -72,6 +76,7 @@ export class ProgressCards {
       run = { route, seq: -1, started: this.now(), tools: new Map(), plan: [],
         status: "active", dirty: false, disabled: false, busy: false, lastWrite: -Infinity };
       this.runs.set(event.runId, run);
+      this.logger.info?.(`slack-thread-focus: progress tracking run ${event.runId}`);
     }
     if (event.sessionKey && event.sessionKey.toLowerCase() !== run.route.sessionKey) return;
     if (event.seq <= run.seq || run.status !== "active" || run.disabled) return;
@@ -146,7 +151,10 @@ export class ProgressCards {
           const card = renderCard(run);
           run.lastWrite = this.now();
           if (run.messageTs) await this.transport.update(run.route.reference, run.messageTs, card);
-          else run.messageTs = await this.transport.post(run.route.reference, card);
+          else {
+            run.messageTs = await this.transport.post(run.route.reference, card);
+            this.logger.info?.(`slack-thread-focus: progress card posted for run ${id}`);
+          }
         }
       }
     } catch (error) {
