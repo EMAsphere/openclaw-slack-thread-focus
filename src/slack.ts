@@ -70,8 +70,11 @@ export class SlackReactionClient {
     const reactions = Array.isArray(payload.message?.reactions)
       ? payload.message.reactions as SlackReaction[]
       : [];
+    // Both reactions feed the same mute/resume watermark. Deduplicate when
+    // the configured primary reaction is already "mute".
+    const muteEmojis = new Set([this.options.muteEmoji, "mute"]);
     return {
-      muteCount: reactionCount(reactions, this.options.muteEmoji),
+      muteCount: [...muteEmojis].reduce((count, name) => count + reactionCount(reactions, name), 0),
       resumeCount: reactionCount(reactions, this.options.resumeEmoji),
       fetchedAt: this.now(),
     };

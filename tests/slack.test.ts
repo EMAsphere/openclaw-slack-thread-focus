@@ -2,6 +2,20 @@ import { describe, expect, it, vi } from "vitest";
 import { SlackReactionClient, SlackReactionError } from "../src/slack.js";
 
 describe("SlackReactionClient", () => {
+  it.each([
+    { primary: "no_bell", reactions: [{ name: "mute", count: 1 }], expected: 1 },
+    { primary: "no_bell", reactions: [{ name: "no_bell", count: 2 }, { name: "mute", count: 3 }, { name: "eyes", count: 9 }], expected: 5 },
+    { primary: "mute", reactions: [{ name: "mute", count: 2 }], expected: 2 },
+    { primary: "quiet", reactions: [{ name: "quiet", count: 1 }, { name: "mute", count: 2 }], expected: 3 },
+    { primary: "no_bell", reactions: [{ name: "mute", users: ["U1", "U2"] }], expected: 2 },
+  ])("counts mute as an alias alongside $primary ($expected total)", async ({ primary, reactions, expected }) => {
+    const fetchImpl = vi.fn<typeof fetch>().mockResolvedValue(new Response(JSON.stringify({
+      ok: true, message: { reactions },
+    })));
+    const client = new SlackReactionClient({ token: "token", muteEmoji: primary, resumeEmoji: "bell", timeoutMs: 1000, fetchImpl });
+    expect((await client.getSnapshot("C123", "1712.0001")).muteCount).toBe(expected);
+  });
+
   it("reads aggregate reaction counts from the root message", async () => {
     const fetchImpl = vi.fn<typeof fetch>().mockResolvedValue(new Response(JSON.stringify({
       ok: true,

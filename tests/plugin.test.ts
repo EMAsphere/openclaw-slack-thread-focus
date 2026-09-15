@@ -12,7 +12,7 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-async function registerPlugin(fetchOverride?: typeof fetch, extra: Record<string, unknown> = {}): Promise<Map<string, Hook>> {
+async function registerPlugin(fetchOverride?: typeof fetch, extra: Record<string, unknown> = {}, muteEmoji = "no_bell"): Promise<Map<string, Hook>> {
   const directory = await mkdtemp(join(tmpdir(), "thread-focus-plugin-"));
   const hooks = new Map<string, Hook>();
   vi.stubEnv("SLACK_BOT_TOKEN", "xoxb-test");
@@ -27,7 +27,7 @@ async function registerPlugin(fetchOverride?: typeof fetch, extra: Record<string
     }
     return new Response(JSON.stringify({
       ok: true,
-      message: { reactions: [{ name: "no_bell", count: 1 }] },
+      message: { reactions: [{ name: muteEmoji, count: 1 }] },
     }), { status: 200 });
   });
   vi.stubGlobal("fetch", fetchOverride ?? defaultFetch);
@@ -135,8 +135,8 @@ describe("OpenClaw hooks", () => {
     await expect(inbound(event as never, context as never)).resolves.toBeUndefined();
   });
 
-  it("cancels a muted reply, then lets message_received persist an explicit mention resume", async () => {
-    const hooks = await registerPlugin();
+  it.each(["no_bell", "mute"])("cancels a reply with %s, then lets message_received persist an explicit mention resume", async (muteEmoji) => {
+    const hooks = await registerPlugin(undefined, {}, muteEmoji);
     const outgoing = hooks.get("message_sending")!;
     const outgoingEvent = {
       to: "C123",
@@ -213,5 +213,27 @@ describe("OpenClaw hooks", () => {
     }), { status: 200 }));
     await receivedPromise;
     await expect(outgoingPromise).resolves.toBeUndefined();
+  });
+
+  it("keeps mixed mute reactions muted until all are removed, and lets bell resume both", async () => {
+    let names = ["no_bell", "mute"];
+    const fetchImpl = vi.fn<typeof fetch>().mockImplementation(async () => new Response(JSON.stringify({
+      ok: true, message: { reactions: names.map((name) => ({ name, count: 1 })) },
+    })));
+    const hooks = await registerPlugin(fetchImpl);
+    const event = { to: "C123", content: "reply", replyToId: "1712.0001" };
+    const context = { channelId: "slack", conversationId: "C123" };
+    const send = () => hooks.get("message_sending")!(event as never, context as never);
+    await expect(send()).resolves.toMatchObject({ cancel: true });
+    names = ["mute"];
+    await expect(send()).resolves.toMatchObject({ cancel: true });
+    names = [];
+    await expect(send()).resolves.toBeUndefined();
+    names = ["mute"];
+    await expect(send()).resolves.toMatchObject({ cancel: true });
+    names = ["mute", "bell"];
+    await expect(send()).resolves.toBeUndefined();
+    names = ["mute", "bell", "no_bell"];
+    await expect(send()).resolves.toMatchObject({ cancel: true });
   });
 });

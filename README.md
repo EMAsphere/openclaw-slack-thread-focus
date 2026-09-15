@@ -1,7 +1,7 @@
 # OpenClaw Slack Thread Focus
 
 An OpenClaw plugin that lets anyone stop a claw from following a Slack thread by
-adding a 🔕 reaction (`no_bell`) to the thread's root message. Mentioning the
+adding a 🔕 (`no_bell`) or 🔇 (`mute`) reaction to the thread's root message. Mentioning the
 claw again resumes that claw in the conversation.
 
 On OpenClaw `2026.7.1`, the global `message_received` hook records explicit
@@ -12,12 +12,12 @@ that deliver it, but global plugins do not receive that hook in `2026.7.1`.
 ## Behaviour
 
 - Any Slack user can mute a thread; reactor identity is deliberately ignored.
-- A root-message 🔕 mutes the current claw for that thread.
-- An explicit `@claw` mention resumes only that claw, even while 🔕 remains.
+- A root-message 🔕 or 🔇 mutes the current claw for that thread.
+- An explicit `@claw` mention resumes only that claw, even while either reaction remains.
 - Adding 🔔 (`bell`) also resumes the claw; this is optional convenience
   behaviour.
-- Adding another 🔕 after a resume mutes the claw again.
-- Removing all 🔕 reactions reactivates the thread.
+- Adding another 🔕 or 🔇 after a resume mutes the claw again.
+- Removing all mute reactions (both 🔕 and 🔇) reactivates the thread.
 - State is persisted per OpenClaw state directory, Slack account, channel,
   thread and agent. Restarts and context compaction do not reset it.
 - Reactions on thread replies are ignored. Only the root message controls focus.
@@ -34,7 +34,7 @@ conversation types it uses).
 After the package is published:
 
 ```bash
-openclaw plugins install @emasphere/openclaw-slack-thread-focus@0.1.0
+openclaw plugins install @emasphere/openclaw-slack-thread-focus@0.1.2
 ```
 
 Enable it in `openclaw.json`:
@@ -56,7 +56,7 @@ For the OpenClaw Kubernetes operator:
 ```yaml
 spec:
   plugins:
-    - npm:@emasphere/openclaw-slack-thread-focus@0.1.0
+    - npm:@emasphere/openclaw-slack-thread-focus@0.1.2
   config:
     raw:
       plugins:
@@ -97,6 +97,10 @@ All options are optional:
 `cacheTtlMs` defaults to `0` so a newly added mute is observed before every
 outgoing delivery. A positive cache reduces Slack API traffic at the cost of a
 small window before a fresh reaction is observed.
+
+`muteEmoji` selects the primary mute reaction (`no_bell` by default). `mute` is
+always accepted as an alias. Their reaction counts are combined for the same
+mute/resume rules, with no double counting if `muteEmoji` is already `mute`.
 
 If Slack is temporarily unavailable, the plugin fails open for unknown or
 active threads and keeps known muted threads muted. Native Slack mentions need
@@ -161,7 +165,7 @@ Before npm publication, build an archive from the desired Git commit:
 npm ci
 npm run check
 npm pack
-openclaw plugins install ./emasphere-openclaw-slack-thread-focus-0.1.1.tgz --force --accept-capabilities
+openclaw plugins install ./emasphere-openclaw-slack-thread-focus-0.1.2.tgz --force --accept-capabilities
 ```
 
 Install the resulting archive on the host. Direct Git installation does not

@@ -65,7 +65,7 @@
   "uiHints": {
     "muteEmoji": {
       "label": "Mute reaction",
-      "help": "Slack reaction name on the root message that mutes the claw."
+      "help": "Primary Slack reaction on the root message that mutes the claw. The mute reaction is also accepted."
     },
     "resumeEmoji": {
       "label": "Resume reaction",
