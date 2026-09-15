@@ -50,13 +50,51 @@
       "agentId": {
         "type": "string",
         "minLength": 1
+      },
+      "progressCards": {
+        "type": "boolean",
+        "default": false
+      },
+      "progressAccountId": {
+        "type": "string",
+        "minLength": 1,
+        "default": "default"
+      },
+      "accountId": {
+        "type": "string",
+        "pattern": "^[a-z0-9][a-z0-9_-]*$"
+      },
+      "accounts": {
+        "type": "object",
+        "minProperties": 1,
+        "propertyNames": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9_-]*$"
+        },
+        "additionalProperties": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "botTokenEnv"
+          ],
+          "properties": {
+            "botTokenEnv": {
+              "type": "string",
+              "pattern": "^[A-Za-z_][A-Za-z0-9_]*$"
+            },
+            "botUserIdEnv": {
+              "type": "string",
+              "pattern": "^[A-Za-z_][A-Za-z0-9_]*$"
+            }
+          }
+        }
       }
     }
   },
   "uiHints": {
     "muteEmoji": {
       "label": "Mute reaction",
-      "help": "Slack reaction name on the root message that mutes the claw."
+      "help": "Primary Slack reaction on the root message that mutes the claw. The mute reaction is also accepted."
     },
     "resumeEmoji": {
       "label": "Resume reaction",
@@ -82,6 +120,22 @@
     "agentId": {
       "label": "Agent id override",
       "help": "Optional stable agent id for multi-agent OpenClaw instances."
+    },
+    "progressCards": {
+      "label": "Thread progress cards",
+      "help": "Opt-in Block Kit progress, checked against thread focus before every write."
+    },
+    "progressAccountId": {
+      "label": "Progress Slack account",
+      "help": "Account owned by botTokenEnv. Cards from other accounts are ignored."
+    },
+    "accountId": {
+      "label": "Slack account scope",
+      "help": "Optional account that owns the token. All focus hooks ignore other accounts; progressAccountId defaults to this account."
+    },
+    "accounts": {
+      "label": "Slack accounts",
+      "help": "Named accounts with separate botTokenEnv and optional botUserIdEnv. Replaces the single-account configuration; focus and progress are isolated per account."
     }
   }
 }

@@ -8,6 +8,8 @@ const DEFAULT_CONFIG: PluginConfig = {
   apiTimeoutMs: 3000,
   cacheTtlMs: 0,
   stateTtlDays: 90,
+  progressCards: false,
+  progressAccountId: "default",
 };
 
 function isObject(value: unknown): value is Record<string, unknown> {
@@ -42,15 +44,36 @@ export function resolvePluginConfig(value: unknown): PluginConfig {
   const agentId = typeof raw.agentId === "string" && raw.agentId.trim()
     ? raw.agentId.trim()
     : undefined;
+  const accountId = typeof raw.accountId === "string" && /^[a-z0-9][a-z0-9_-]*$/.test(raw.accountId)
+    ? raw.accountId
+    : undefined;
 
   return {
     muteEmoji: emojiName(raw.muteEmoji, DEFAULT_CONFIG.muteEmoji),
     resumeEmoji: emojiName(raw.resumeEmoji, DEFAULT_CONFIG.resumeEmoji),
     botTokenEnv,
     botUserIdEnv,
+    progressCards: raw.progressCards === true,
+    progressAccountId: stringValue(raw.progressAccountId, accountId ?? DEFAULT_CONFIG.progressAccountId),
     apiTimeoutMs: integerValue(raw.apiTimeoutMs, DEFAULT_CONFIG.apiTimeoutMs, 250, 30_000),
     cacheTtlMs: integerValue(raw.cacheTtlMs, DEFAULT_CONFIG.cacheTtlMs, 0, 60_000),
     stateTtlDays: integerValue(raw.stateTtlDays, DEFAULT_CONFIG.stateTtlDays, 1, 3650),
     ...(agentId ? { agentId } : {}),
+    ...(accountId ? { accountId } : {}),
   };
+}
+
+export function resolveAccountConfigs(value: unknown): PluginConfig[] {
+  const base = resolvePluginConfig(value);
+  if (!isObject(value) || !isObject(value.accounts)) return [base];
+  return Object.entries(value.accounts).flatMap(([accountId, settings]) => {
+    if (!/^[a-z0-9][a-z0-9_-]*$/.test(accountId) || !isObject(settings) ||
+        typeof settings.botTokenEnv !== "string" || !/^[A-Za-z_][A-Za-z0-9_]*$/.test(settings.botTokenEnv)) return [];
+    return [{
+      ...base, accountId, progressAccountId: accountId, botTokenEnv: settings.botTokenEnv,
+      // Resolve each bot through auth.test unless its own identity env is supplied.
+      botUserIdEnv: typeof settings.botUserIdEnv === "string" && /^[A-Za-z_][A-Za-z0-9_]*$/.test(settings.botUserIdEnv)
+        ? settings.botUserIdEnv : "",
+    }];
+  });
 }
