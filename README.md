@@ -107,6 +107,35 @@ active threads and keeps known muted threads muted. Native Slack mentions need
 the raw-message lookup, so a new resume cannot be guaranteed during a Slack API
 outage.
 
+### Multiple Slack bots in one instance
+
+Version 0.1.4 supports a separate token and focus/progress state for each named
+Slack account. The keys must match `channels.slack.accounts`. All agents routed
+through a configured account receive cards, including specialized agents.
+
+```json
+{
+  "progressCards": true,
+  "accounts": {
+    "sergio": { "botTokenEnv": "SERGIO_SLACK_BOT_TOKEN" },
+    "roger": { "botTokenEnv": "ROGER_SLACK_BOT_TOKEN" },
+    "fabrice": { "botTokenEnv": "FABRICE_SLACK_BOT_TOKEN" },
+    "maurice": { "botTokenEnv": "MAURICE_SLACK_BOT_TOKEN" }
+  }
+}
+```
+
+Put this under the plugin's `config` and grant conversation access as shown
+below. `accounts` replaces the single-token settings. Each bot resolves its own
+identity with `auth.test`, unless its entry supplies `botUserIdEnv`. Hooks ignore
+unconfigured accounts. Each named account uses a separate `state-<account>.json`
+file, so concurrent bots cannot overwrite another account's mute/resume state.
+Existing single-token installations keep their original `state.json`.
+
+To restrict a single-token setup, set `accountId` to its Slack account id;
+`progressAccountId` defaults to that value. Without `accountId`, the historical
+focus-hook behavior remains unchanged.
+
 ### Slack progress cards (opt-in)
 
 On OpenClaw `2026.9.2`, registering an outbound modifier such as our
@@ -173,7 +202,7 @@ Before npm publication, build an archive from the desired Git commit:
 npm ci
 npm run check
 npm pack
-openclaw plugins install ./emasphere-openclaw-slack-thread-focus-0.1.3.tgz --force --accept-capabilities
+openclaw plugins install ./emasphere-openclaw-slack-thread-focus-0.1.4.tgz --force --accept-capabilities
 ```
 
 Install the resulting archive on the host. Direct Git installation does not

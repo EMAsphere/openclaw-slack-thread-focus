@@ -72,7 +72,7 @@ describe("OpenClaw hooks", () => {
     expect(hooks.has("message_sending")).toBe(true);
   });
 
-  it("correlates host hooks to progress and waits for a pending mention before posting", async () => {
+  it.each(["default", "sergio"])("correlates %s account hooks to progress and waits for a pending mention before posting", async (accountId) => {
     vi.useFakeTimers();
     let releaseReplies!: (value: Response) => void;
     const fetchImpl = vi.fn<typeof fetch>().mockImplementation(async (input) => {
@@ -86,14 +86,14 @@ describe("OpenClaw hooks", () => {
     let cleanup!: { cleanup(context: object): void };
     try {
       const hooks = await registerPlugin(fetchImpl, {
-        pluginConfig: { progressCards: true },
+        pluginConfig: { progressCards: true, accountId },
         agent: { events: { registerAgentEventSubscription: (value: Subscription) => { subscription = value; } } },
         lifecycle: { registerRuntimeLifecycle: (value: typeof cleanup) => { cleanup = value; } },
       });
       const sessionKey = "agent:main:slack:channel:c123:thread:1712.0001";
       const received = hooks.get("message_received")!({
         from: "slack:C123", content: "reviens", messageId: "1712.0002", threadId: "1712.0001", sessionKey,
-      } as never, { channelId: "slack", conversationId: "C123", sessionKey } as never);
+      } as never, { channelId: "slack", accountId, conversationId: "C123", sessionKey } as never);
       await hooks.get("before_agent_reply")!({} as never, { sessionKey, trigger: "user" } as never);
       subscription.handle({ runId: "r1", seq: 1, stream: "tool", sessionKey, ts: Date.now(),
         data: { phase: "start", toolCallId: "t1", name: "exec" } });
@@ -108,6 +108,21 @@ describe("OpenClaw hooks", () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+  it.each(["roger", "fabrice", "maurice", undefined])("ignores %s account hooks when the token belongs to Sergio", async (accountId) => {
+    const fetchImpl = vi.fn<typeof fetch>().mockImplementation(async () => new Response(JSON.stringify({
+      ok: true, message: { reactions: [{ name: "mute", count: 1 }] },
+    })));
+    const hooks = await registerPlugin(fetchImpl, { pluginConfig: { accountId: "sergio" } });
+    const context = { channelId: "slack", accountId, conversationId: "C123", sessionKey: "agent:main:slack:channel:c123:thread:1712.0001" };
+    const event = { channel: "slack", content: "@Sergio", to: "C123", threadId: "1712.0001", messageId: "1712.0002" };
+    for (const hook of ["message_received", "inbound_claim", "message_sending"]) {
+      await expect(hooks.get(hook)!(event as never, context as never)).resolves.toBeUndefined();
+    }
+    expect(fetchImpl).not.toHaveBeenCalled();
+    // The same token still enforces focus for its own account.
+    await expect(hooks.get("message_sending")!(event as never, { ...context, accountId: "sergio" } as never))
+      .resolves.toMatchObject({ cancel: true });
   });
   it("claims a muted inbound message before the model and lets a mention resume", async () => {
     const hooks = await registerPlugin();

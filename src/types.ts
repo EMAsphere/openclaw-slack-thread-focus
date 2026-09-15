@@ -39,6 +39,7 @@ export type PluginConfig = {
   stateTtlDays: number;
   progressCards: boolean;
   progressAccountId: string;
+  accountId?: string;
   agentId?: string;
 };
 

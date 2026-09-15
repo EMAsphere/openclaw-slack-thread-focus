@@ -2,7 +2,7 @@ import { homedir } from "node:os";
 import { createHash } from "node:crypto";
 import { join } from "node:path";
 import type { OpenClawPluginApi } from "openclaw/plugin-sdk/plugin-entry";
-import { resolvePluginConfig } from "./config.js";
+import { resolveAccountConfigs } from "./config.js";
 import { ThreadFocusController } from "./controller.js";
 import { containsAgentNameMention } from "./mention.js";
 import { resolveInboundReference, resolveOutboundReference } from "./routing.js";
@@ -11,7 +11,7 @@ import { JsonThreadStateStore } from "./store.js";
 import { ProgressCards } from "./progress.js";
 import { SlackProgressClient } from "./progress-slack.js";
 import { acquireSharedRuntime } from "./shared-runtime.js";
-import type { ThreadReference } from "./types.js";
+import type { PluginConfig, ThreadReference } from "./types.js";
 
 function resolveDefaultAgentId(api: OpenClawPluginApi): string {
   const agents = api.config.agents?.list;
@@ -65,7 +65,10 @@ function optionalText(value: unknown): string {
 }
 
 export function registerSlackThreadFocus(api: OpenClawPluginApi): void {
-  const config = resolvePluginConfig(api.pluginConfig);
+  for (const config of resolveAccountConfigs(api.pluginConfig)) registerAccount(api, config);
+}
+
+function registerAccount(api: OpenClawPluginApi, config: PluginConfig): void {
   const token = process.env[config.botTokenEnv]?.trim();
   const botUserId = process.env[config.botUserIdEnv]?.trim();
   const stateDir = api.runtime.state.resolveStateDir(process.env) || fallbackStateDir();
@@ -73,7 +76,7 @@ export function registerSlackThreadFocus(api: OpenClawPluginApi): void {
     typeof api.lifecycle?.registerRuntimeLifecycle === "function";
   const createRuntime = () => {
     const store = new JsonThreadStateStore(
-      join(stateDir, "plugins", "slack-thread-focus", "state.json"),
+      join(stateDir, "plugins", "slack-thread-focus", config.accountId ? `state-${config.accountId}.json` : "state.json"),
       config.stateTtlDays * 24 * 60 * 60 * 1000,
     );
     const reactions = token
@@ -105,17 +108,18 @@ export function registerSlackThreadFocus(api: OpenClawPluginApi): void {
   ) : undefined;
   const { controller, reactions, pendingMentionChecks, checkFocus, progress } = shared?.value ?? createRuntime();
   const defaultAgentId = resolveDefaultAgentId(api);
+  const subscriptionId = config.accountId ? `slack-thread-progress-${config.accountId}` : "slack-thread-progress";
   if (config.progressCards) {
     if (supportsProgress) {
       // CLI/init containers may not have Slack credentials. They must still discover
       // the same registrations as the gateway when accepting plugin capabilities.
       api.agent.events.registerAgentEventSubscription({
-        id: "slack-thread-progress",
+        id: subscriptionId,
         streams: ["tool", "plan", "lifecycle"],
         handle: (event) => progress?.handle(event),
       });
       api.lifecycle.registerRuntimeLifecycle({
-        id: "slack-thread-progress",
+        id: subscriptionId,
         cleanup: (context) => {
           if (context.runId || context.sessionKey) progress?.cleanup(context);
           else if (shared?.release() ?? true) progress?.cleanup();
@@ -124,7 +128,7 @@ export function registerSlackThreadFocus(api: OpenClawPluginApi): void {
       api.on("before_agent_reply", (_event, context) => {
         progress?.authorizeReply(context.sessionKey, context.trigger);
       });
-      if (progress) api.logger.info?.("slack-thread-focus: progress cards enabled");
+      if (progress) api.logger.info?.(`slack-thread-focus: progress cards enabled for ${config.progressAccountId}`);
     } else {
       api.logger.warn?.("slack-thread-focus: progress cards require the agent event/lifecycle APIs");
     }
@@ -150,7 +154,7 @@ export function registerSlackThreadFocus(api: OpenClawPluginApi): void {
       event,
       context,
     });
-    if (!reference) {
+    if (!reference || (config.accountId && reference.accountId !== config.accountId)) {
       return;
     }
 
@@ -204,7 +208,7 @@ export function registerSlackThreadFocus(api: OpenClawPluginApi): void {
       event,
       context,
     });
-    if (!reference) {
+    if (!reference || (config.accountId && reference.accountId !== config.accountId)) {
       return;
     }
 
@@ -235,7 +239,7 @@ export function registerSlackThreadFocus(api: OpenClawPluginApi): void {
       event,
       context,
     });
-    if (!reference) {
+    if (!reference || (config.accountId && reference.accountId !== config.accountId)) {
       return;
     }
     const decision = await checkFocus(reference);

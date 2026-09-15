@@ -59,6 +59,35 @@
         "type": "string",
         "minLength": 1,
         "default": "default"
+      },
+      "accountId": {
+        "type": "string",
+        "pattern": "^[a-z0-9][a-z0-9_-]*$"
+      },
+      "accounts": {
+        "type": "object",
+        "minProperties": 1,
+        "propertyNames": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9_-]*$"
+        },
+        "additionalProperties": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "botTokenEnv"
+          ],
+          "properties": {
+            "botTokenEnv": {
+              "type": "string",
+              "pattern": "^[A-Za-z_][A-Za-z0-9_]*$"
+            },
+            "botUserIdEnv": {
+              "type": "string",
+              "pattern": "^[A-Za-z_][A-Za-z0-9_]*$"
+            }
+          }
+        }
       }
     }
   },
@@ -99,6 +128,14 @@
     "progressAccountId": {
       "label": "Progress Slack account",
       "help": "Account owned by botTokenEnv. Cards from other accounts are ignored."
+    },
+    "accountId": {
+      "label": "Slack account scope",
+      "help": "Optional account that owns the token. All focus hooks ignore other accounts; progressAccountId defaults to this account."
+    },
+    "accounts": {
+      "label": "Slack accounts",
+      "help": "Named accounts with separate botTokenEnv and optional botUserIdEnv. Replaces the single-account configuration; focus and progress are isolated per account."
     }
   }
 }
