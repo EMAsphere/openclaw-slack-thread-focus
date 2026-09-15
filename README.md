@@ -118,6 +118,7 @@ Enable this plugin's own Block Kit card instead:
     "entries": {
       "slack-thread-focus": {
         "enabled": true,
+        "hooks": { "allowConversationAccess": true },
         "config": { "progressCards": true }
       }
     }
@@ -144,6 +145,9 @@ restart, or interrupted event stream.
 Requires Slack `chat:write`, the existing reaction/history scopes, and the host's
 agent-event and runtime-lifecycle APIs. Enable capability consent after upgrading:
 `openclaw plugins enable slack-thread-focus --accept-capabilities`.
+OpenClaw `2026.9.2` also requires the explicit `hooks.allowConversationAccess`
+grant shown above for `before_agent_reply`. The plugin observes that hook only
+to correlate a user turn with its Slack thread; it does not modify the reply.
 
 The bot token must belong to `progressAccountId` (default `"default"`). Other
 Slack accounts are ignored for progress. Only recently received Slack messages
