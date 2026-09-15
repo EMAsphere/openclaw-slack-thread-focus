@@ -58,6 +58,20 @@ describe("OpenClaw hooks", () => {
     expect(hooks.has("before_agent_reply")).toBe(false);
   });
 
+  it("declares the same progress capabilities during credential-free CLI setup", async () => {
+    const register = vi.fn();
+    const lifecycle = vi.fn();
+    const hooks = await registerPlugin(undefined, {
+      pluginConfig: { progressCards: true, botTokenEnv: "UNSET_THREAD_FOCUS_TEST_TOKEN" },
+      agent: { events: { registerAgentEventSubscription: register } },
+      lifecycle: { registerRuntimeLifecycle: lifecycle },
+    });
+    expect(register).toHaveBeenCalledOnce();
+    expect(lifecycle).toHaveBeenCalledOnce();
+    expect(hooks.has("before_agent_reply")).toBe(true);
+    expect(hooks.has("message_sending")).toBe(true);
+  });
+
   it("correlates host hooks to progress and waits for a pending mention before posting", async () => {
     vi.useFakeTimers();
     let releaseReplies!: (value: Response) => void;

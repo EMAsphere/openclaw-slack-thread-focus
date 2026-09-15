@@ -95,10 +95,14 @@ export function registerSlackThreadFocus(api: OpenClawPluginApi): void {
   };
   let progress: ProgressCards | undefined;
   if (config.progressCards) {
-    if (token && api.agent?.events?.registerAgentEventSubscription && api.lifecycle?.registerRuntimeLifecycle) {
-      progress = new ProgressCards(
-        new SlackProgressClient(token, config.apiTimeoutMs), checkFocus, api.logger, config.progressAccountId,
-      );
+    if (api.agent?.events?.registerAgentEventSubscription && api.lifecycle?.registerRuntimeLifecycle) {
+      if (token) {
+        progress = new ProgressCards(
+          new SlackProgressClient(token, config.apiTimeoutMs), checkFocus, api.logger, config.progressAccountId,
+        );
+      }
+      // CLI/init containers may not have Slack credentials. They must still discover
+      // the same registrations as the gateway when accepting plugin capabilities.
       api.agent.events.registerAgentEventSubscription({
         id: "slack-thread-progress",
         streams: ["tool", "plan", "lifecycle"],
@@ -111,9 +115,9 @@ export function registerSlackThreadFocus(api: OpenClawPluginApi): void {
       api.on("before_agent_reply", (_event, context) => {
         progress?.authorizeReply(context.sessionKey, context.trigger);
       });
-      api.logger.info?.("slack-thread-focus: progress cards enabled");
+      if (progress) api.logger.info?.("slack-thread-focus: progress cards enabled");
     } else {
-      api.logger.warn?.("slack-thread-focus: progress cards require a Slack token and the agent event/lifecycle APIs");
+      api.logger.warn?.("slack-thread-focus: progress cards require the agent event/lifecycle APIs");
     }
   }
 
