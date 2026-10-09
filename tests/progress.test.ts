@@ -135,6 +135,47 @@ describe("focus-aware progress cards", () => {
     expect(JSON.stringify(card)).not.toContain("SECRET");
   });
 
+  it("tracks CLI runs that start before authorization and emit tools without a session key", async () => {
+    const { cards, transport } = setup();
+    cards.cleanup();
+    let seq = 0;
+    const cli = (stream: string, data: Record<string, unknown>, extra: Partial<ProgressEvent> = {}) =>
+      cards.handle({ runId: "cli1", seq: ++seq, stream, data, ts: Date.now(), ...extra });
+    cards.rememberInbound(sessionKey, reference);
+    cli("lifecycle", { phase: "start" }, { sessionKey });
+    cards.authorizeReply(sessionKey, "user", "cli1");
+    cli("tool", { phase: "start", toolCallId: "t1", name: "exec" }, { agentId: "main" });
+    await vi.advanceTimersByTimeAsync(0);
+    expect(transport.post).toHaveBeenCalledTimes(1);
+    expect(transport.post.mock.calls[0]?.[0]).toEqual(reference);
+    cli("tool", { phase: "result", toolCallId: "t1", name: "exec" });
+    cli("lifecycle", { phase: "end" }, { sessionKey });
+    await vi.advanceTimersByTimeAsync(1500);
+    expect(JSON.stringify(transport.update.mock.calls)).toContain("Terminé");
+  });
+
+  it("binds session-less events only to the authorized run", async () => {
+    const { cards, transport } = setup();
+    cards.cleanup();
+    let seq = 0;
+    const handle = (runId: string, stream: string, data: Record<string, unknown>, extra: Partial<ProgressEvent> = {}) =>
+      cards.handle({ runId, seq: ++seq, stream, data, ts: Date.now(), ...extra });
+    cards.rememberInbound(sessionKey, reference);
+    cards.authorizeReply(sessionKey, "heartbeat", "hb1");
+    handle("hb1", "tool", { phase: "start", toolCallId: "t1", name: "exec" });
+    cards.authorizeReply(sessionKey, "user", "u1");
+    handle("other", "tool", { phase: "start", toolCallId: "t1", name: "exec" });
+    handle("other", "lifecycle", { phase: "start" }, { sessionKey });
+    handle("u1", "tool", { phase: "start", toolCallId: "t1", name: "exec" }, { agentId: "ops" });
+    await vi.advanceTimersByTimeAsync(0);
+    expect(transport.post).not.toHaveBeenCalled();
+    // A run that ends without progress releases its binding.
+    handle("u1", "lifecycle", { phase: "end" }, { sessionKey });
+    handle("u1", "tool", { phase: "start", toolCallId: "t2", name: "exec" });
+    await vi.runAllTimersAsync();
+    expect(transport.post).not.toHaveBeenCalled();
+  });
+
   it("fails closed for progress when Slack reaction state is unavailable", async () => {
     const { check, event, transport } = setup();
     check.mockResolvedValue({ muted: false, source: "fail-open" });

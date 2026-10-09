@@ -126,7 +126,7 @@ function registerAccount(api: OpenClawPluginApi, config: PluginConfig): void {
         },
       });
       api.on("before_agent_reply", (_event, context) => {
-        progress?.authorizeReply(context.sessionKey, context.trigger);
+        progress?.authorizeReply(context.sessionKey, context.trigger, context.runId);
       });
       if (progress) api.logger.info?.(`slack-thread-focus: progress cards enabled for ${config.progressAccountId}`);
     } else {

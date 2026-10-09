@@ -189,6 +189,9 @@ agent-event and runtime-lifecycle APIs. Enable capability consent after upgradin
 OpenClaw `2026.9.2` also requires the explicit `hooks.allowConversationAccess`
 grant shown above for `before_agent_reply`. The plugin observes that hook only
 to correlate a user turn with its Slack thread; it does not modify the reply.
+Since 0.1.5 the authorized turn is bound to the hook's run id, so runtimes that
+emit lifecycle start before `before_agent_reply` and tool events without a
+session key (the `claude-cli` runtime on OpenClaw `2026.9.6`) still get a card.
 
 The bot token must belong to `progressAccountId` (default `"default"`). Other
 Slack accounts are ignored for progress. Only recently received Slack messages
@@ -202,7 +205,7 @@ Before npm publication, build an archive from the desired Git commit:
 npm ci
 npm run check
 npm pack
-openclaw plugins install ./emasphere-openclaw-slack-thread-focus-0.1.4.tgz --force --accept-capabilities
+openclaw plugins install ./emasphere-openclaw-slack-thread-focus-0.1.5.tgz --force --accept-capabilities
 ```
 
 Install the resulting archive on the host. Direct Git installation does not
