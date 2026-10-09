@@ -31,6 +31,7 @@ function status(value: unknown): Step["status"] {
 /** Correlates only recently received Slack turns, never guesses destinations from events. */
 export class ProgressCards {
   private readonly routes = new Map<string, Route>();
+  private readonly runRoutes = new Map<string, Route>();
   private readonly runs = new Map<string, Run>();
   private readonly finished = new Map<string, number>();
 
@@ -53,9 +54,16 @@ export class ProgressCards {
     this.logger.info?.(`slack-thread-focus: progress received ${key}`);
   }
 
-  authorizeReply(sessionKey: string | undefined, trigger: string | undefined): void {
+  authorizeReply(sessionKey: string | undefined, trigger: string | undefined, runId?: string): void {
     const route = sessionKey ? this.routes.get(sessionKey.toLowerCase()) : undefined;
     if (route) route.armed = trigger === "user";
+    // CLI runtimes emit lifecycle start before this hook, and tool events of channel runs carry no
+    // session key: hand the authorized route to its run id so those events still find their thread.
+    if (route?.armed && runId && !this.runs.has(runId) && !this.finished.has(runId) &&
+      (this.runRoutes.size < LIMIT || this.runRoutes.has(runId))) {
+      this.routes.delete(route.sessionKey);
+      this.runRoutes.set(runId, { ...route, expires: this.now() + ROUTE_TTL });
+    }
     if (route || sessionKey?.includes(":slack:")) {
       this.logger.info?.(`slack-thread-focus: progress reply ${sessionKey} trigger=${trigger ?? "unknown"} route=${route ? "found" : "missing"}`);
     }
@@ -66,13 +74,18 @@ export class ProgressCards {
     if (this.finished.has(event.runId)) return;
     let run = this.runs.get(event.runId);
     if (!run) {
+      const bound = this.runRoutes.get(event.runId);
       const key = event.sessionKey?.toLowerCase();
-      const route = key ? this.routes.get(key) : undefined;
-      if (!route?.armed || this.runs.size >= LIMIT ||
+      const route = bound ?? (key ? this.routes.get(key) : undefined);
+      if (!route || !(bound || route.armed) || this.runs.size >= LIMIT ||
         (event.agentId && event.agentId !== route.reference.agentId)) return;
       // A terminal event alone must not consume a route intended for the next turn.
-      if (event.stream === "lifecycle" && event.data.phase !== "start") return;
-      this.routes.delete(route.sessionKey);
+      if (event.stream === "lifecycle" && event.data.phase !== "start") {
+        if (bound) this.runRoutes.delete(event.runId);
+        return;
+      }
+      if (bound) this.runRoutes.delete(event.runId);
+      else this.routes.delete(route.sessionKey);
       run = { route, seq: -1, started: this.now(), tools: new Map(), plan: [],
         status: "active", dirty: false, disabled: false, busy: false, lastWrite: -Infinity };
       this.runs.set(event.runId, run);
@@ -116,12 +129,17 @@ export class ProgressCards {
       if (run.timer) clearTimeout(run.timer);
       this.runs.delete(id);
     }
-    if (scope.sessionKey) this.routes.delete(scope.sessionKey.toLowerCase());
-    else if (!scope.runId) { this.routes.clear(); this.finished.clear(); }
+    if (scope.runId) this.runRoutes.delete(scope.runId);
+    if (scope.sessionKey) {
+      const key = scope.sessionKey.toLowerCase();
+      this.routes.delete(key);
+      for (const [id, route] of this.runRoutes) if (route.sessionKey === key) this.runRoutes.delete(id);
+    } else if (!scope.runId) { this.routes.clear(); this.runRoutes.clear(); this.finished.clear(); }
   }
 
   private prune(): void {
     for (const [key, route] of this.routes) if (route.expires <= this.now()) this.routes.delete(key);
+    for (const [id, route] of this.runRoutes) if (route.expires <= this.now()) this.runRoutes.delete(id);
     for (const [id, expires] of this.finished) if (expires <= this.now()) this.finished.delete(id);
     for (const [id, run] of this.runs) if (run.started + RUN_TTL <= this.now()) this.cleanup({ runId: id });
   }

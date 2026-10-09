@@ -109,6 +109,41 @@ describe("OpenClaw hooks", () => {
       vi.useRealTimers();
     }
   });
+  it("forwards the reply run id so session-less CLI tool events reach their thread", async () => {
+    vi.useFakeTimers();
+    const fetchImpl = vi.fn<typeof fetch>().mockImplementation(async (input) => {
+      const url = String(input);
+      if (url.includes("chat.postMessage")) return new Response(JSON.stringify({ ok: true, ts: "1712.0009" }));
+      if (url.includes("conversations.replies")) {
+        return new Response(JSON.stringify({ ok: true, messages: [{ ts: "1712.0002", text: "status ?" }] }));
+      }
+      return new Response(JSON.stringify({ ok: true, message: { reactions: [] } }));
+    });
+    type Subscription = { handle(event: Record<string, unknown>): void };
+    let subscription!: Subscription;
+    let cleanup!: { cleanup(context: object): void };
+    try {
+      const hooks = await registerPlugin(fetchImpl, {
+        pluginConfig: { progressCards: true },
+        agent: { events: { registerAgentEventSubscription: (value: Subscription) => { subscription = value; } } },
+        lifecycle: { registerRuntimeLifecycle: (value: typeof cleanup) => { cleanup = value; } },
+      });
+      const sessionKey = "agent:main:slack:channel:c123:thread:1712.0001";
+      await hooks.get("message_received")!({
+        from: "slack:C123", content: "status ?", messageId: "1712.0002", threadId: "1712.0001", sessionKey,
+      } as never, { channelId: "slack", accountId: "default", conversationId: "C123", sessionKey } as never);
+      subscription.handle({ runId: "r1", seq: 1, stream: "lifecycle", sessionKey, ts: Date.now(), data: { phase: "start" } });
+      await hooks.get("before_agent_reply")!({} as never, { sessionKey, trigger: "user", runId: "r1" } as never);
+      subscription.handle({ runId: "r1", seq: 2, stream: "tool", ts: Date.now(),
+        data: { phase: "start", toolCallId: "t1", name: "exec" } });
+      await vi.waitFor(() => {
+        expect(fetchImpl.mock.calls.filter(([url]) => String(url).includes("chat.postMessage"))).toHaveLength(1);
+      });
+      cleanup.cleanup({});
+    } finally {
+      vi.useRealTimers();
+    }
+  });
   it.each(["roger", "fabrice", "maurice", undefined])("ignores %s account hooks when the token belongs to Sergio", async (accountId) => {
     const fetchImpl = vi.fn<typeof fetch>().mockImplementation(async () => new Response(JSON.stringify({
       ok: true, message: { reactions: [{ name: "mute", count: 1 }] },
